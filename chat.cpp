@@ -27,7 +27,20 @@
 #define MAXDATASIZE 100
 #define BACKLOG 10 // how many pending connections queue will hold
 
-int client(char* hostname, char* port) {
+void sigchld_handler(int s){
+  int save_errno = errno;
+  while(waitpid(-1, NULL, WNOHANG) > 0);
+  errno = save_errno;
+}
+
+void *get_in_addr(struct sockaddr *sa){
+  if(sa->sa_family == AF_INET){
+    return &(((struct sockaddr_in*)sa)->sin_addr); // IPV$
+  }
+  return &(((struct sockaddr_in6*)sa)->sin6_addr); // IPV6
+}
+
+int client(const char* hostname, const char* port) {
   // set up tcp connection
   // loop
   //   prompt user for message
@@ -80,24 +93,11 @@ int client(char* hostname, char* port) {
 
   buf[numbytes] = '\0';
 
-  printf("client: recieved '%s'\n", buf):
+  printf("client: recieved '%s'\n", buf);
 
   close(sockfd);
   
   return 0;
-}
-
-void sigchld_handler(int s){
-  int save_errno = errno;
-  while(waitpid(-1, NULL, WNOHANG) > 0);
-  errno = save_errno;
-}
-
-void *get_in_addr(struct sockaddr *sa){
-  if(sa->sa_family == AF_INET){
-    return &(((struct sockaddr_in*)sa)->sin_addr); // IPV$
-  }
-  return &(((struct sockaddr_in6*)sa)->sin6_addr); // IPV6
 }
 
 int server() {
