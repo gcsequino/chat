@@ -24,15 +24,66 @@
 #include <time.h>
 
 #define MYPORT "3490" // the port users will be connecting to
+#define MAXDATASIZE 100
 #define BACKLOG 10 // how many pending connections queue will hold
 
-int client() {
+int client(char* hostname, char* port) {
   // set up tcp connection
   // loop
   //   prompt user for message
   //   send the message
   //   block to recieve message
   //   recieve message and print
+  int sockfd, numbytes;
+  char buf[MAXDATASIZE];
+  struct addrinfo hints, *servinfo, *p;
+  int rv;
+  char s[INET6_ADDRSTRLEN];
+
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+
+  if((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0){
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+    return 1;
+  }
+
+  for(p = servinfo; p != NULL; p = p->ai_next){
+    if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+      perror("client: socket");
+      continue;
+    }
+    if(connect(sockfd, p->ai_addr, p->ai_addrlen) == -1){
+      close(sockfd);
+      perror("client: connect");
+      continue;
+    }
+    break;
+  }
+
+  if(p == NULL){
+    fprintf(stderr, "client: failed to connect\n");
+    return 2;
+  }
+
+  inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
+            s, sizeof s);
+  printf("client: connecting to %s\n", s);
+
+  freeaddrinfo(servinfo);
+
+  if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1){
+    perror("recv");
+    exit(1);
+  }
+
+  buf[numbytes] = '\0';
+
+  printf("client: recieved '%s'\n", buf):
+
+  close(sockfd);
+  
   return 0;
 }
 
@@ -149,7 +200,7 @@ void help() {
 }
 
 int main(int argc, char* argv[]){
-  const char* ip = "-1";
+  const char* hostname = "-1";
   const char* port = "-1";
   bool valid_usage = true;
 
@@ -163,7 +214,7 @@ int main(int argc, char* argv[]){
         break;
       case 's':
         // server address
-        ip = optarg;
+        hostname = optarg;
         //cout << "IP: " << ip << "\n";
         break;
       case 'h':
@@ -177,7 +228,7 @@ int main(int argc, char* argv[]){
     }
   }
 
-  if(!strcmp(ip, "-1") && !strcmp(port, "-1") && valid_usage) {
+  if(!strcmp(hostname, "-1") && !strcmp(port, "-1") && valid_usage) {
     // server
     printf("starting server\n");
     return server();
@@ -185,7 +236,7 @@ int main(int argc, char* argv[]){
   else if(valid_usage){
     // client
     printf("starting client\n");
-    return client();
+    return client(hostname, port);
   }
   return 0;
 }
