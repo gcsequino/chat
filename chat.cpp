@@ -24,20 +24,162 @@
 #include <time.h>
 
 #define MYPORT "3490" // the port users will be connecting to
-#define MAXDATASIZE 100
 #define BACKLOG 10 // how many pending connections queue will hold
+#define MAXDATASIZE 140 // max length of chat message
+#define CHAT_VERSION 457 // version of chat protocol
 
-void sigchld_handler(int s){
+struct chat_packet {
+  uint16_t  version = CHAT_VERSION;
+  uint16_t  length;
+  char      message[];
+};
+
+void create_chat_packet(char* msg, unsigned short lenngth){
+
+}
+
+char* pack(struct chat_packet *packet){
+  uint16_t net_version = htons(packet->version);
+  uint16_t net_length = htons(packet->length);
+
+  char *buf;
+  *buf++ = net_version >> 8;
+  *buf++ = net_version;
+  *buf++ = net_length >> 8;
+  *buf++ = net_length;
+  // use memcopy here
+  buf = packet->message;
+  return buf;
+}
+
+struct chat_packet unpack(char* data){
+  uint16_t version;
+  uint16_t length;
+
+  version = (uint16_t)(data[1]<<8 | data[0]);
+  length = (uint16_t)(data[2])
+}
+
+void sigchld_handler(int s) {
   int save_errno = errno;
   while(waitpid(-1, NULL, WNOHANG) > 0);
   errno = save_errno;
 }
 
-void *get_in_addr(struct sockaddr *sa){
+void *get_in_addr(struct sockaddr *sa) {
   if(sa->sa_family == AF_INET){
     return &(((struct sockaddr_in*)sa)->sin_addr); // IPV$
   }
   return &(((struct sockaddr_in6*)sa)->sin6_addr); // IPV6
+}
+
+void format_hints(struct addrinfo *hints) {
+  memset(hints, 0, sizeof *hints);
+  hints->ai_family = AF_UNSPEC;
+  hints->ai_socktype = SOCK_STREAM;
+  hints->ai_flags = AI_PASSIVE;
+}
+
+int resolve_addrinfo(struct addrinfo *hints, struct addrinfo **servinfo){
+  int rv;
+  if ((rv = getaddrinfo(NULL, MYPORT, hints, servinfo)) != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+    return 1;
+  }
+  return 0;
+}
+
+void connect(struct addrinfo *servinfo, int *sockfd) {
+  struct addrinfo *p;
+  int yes=1;
+  for(p = servinfo; p != NULL; p = p->ai_next){
+    if((*sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+      perror("server: socket");
+      continue;
+    }
+    if(setsockopt(*sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1){
+      perror("setsockopt");
+      exit(1);
+    }
+    if(bind(*sockfd, p->ai_addr, p->ai_addrlen) == -1){
+      close(*sockfd);
+      perror("server: bind");
+      continue;
+    }
+    break;
+  }
+  freeaddrinfo(servinfo);
+  
+  if(p == NULL){
+    fprintf(stderr, "server: failed to bind\n");
+    exit(1);
+  }
+
+  if(listen(*sockfd, BACKLOG) == -1){
+    perror("listen");
+    exit(1);
+  }
+}
+
+void reap(){
+  struct sigaction sa;
+  sa.sa_handler = sigchld_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  if(sigaction(SIGCHLD, &sa, NULL) == -1){
+    perror("sigaction");
+    exit(1);
+  }
+}
+
+void child(int *sockfd, int *new_fd) {
+  int numbytes;
+  char recv_buf[MAXDATASIZE];
+  char send_buf[MAXDATASIZE];
+  close(*sockfd);
+  if(send(*new_fd, "Hello from server!", 18, 0) == -1){
+    perror("send");
+  }
+  // loop
+  //   block to revieve message
+  //   revieve and print message
+  //   prompt user for message to send
+  //   send message to client
+  while(1){
+    if((numbytes = recv(*sockfd, recv_buf, MAXDATASIZE-1, 0)) == -1){
+      perror("recv");
+      exit(1);
+    }
+    recv_buf[numbytes] = '\0';
+    printf("server: recieved '%s'\n", recv_buf);
+  }
+  close(*new_fd);
+  exit(0);
+}
+
+void accept_connections(struct sockaddr_storage *their_addr, int *sockfd){
+  int new_fd;
+  char s[INET6_ADDRSTRLEN];
+  socklen_t sin_size;
+  printf("server: waiting for connections...\n");
+  while(1){
+    sin_size = sizeof *their_addr;
+    new_fd = accept(*sockfd, (struct sockaddr *)their_addr, &sin_size);
+    if(new_fd == -1){
+      perror("accept");
+      continue;
+    }
+
+    inet_ntop(their_addr->ss_family,
+              get_in_addr((struct sockaddr *)their_addr),
+              s, sizeof s);
+    printf("server: get connection from %s\n", s);
+
+    if(!fork()){
+      child(sockfd, &new_fd);
+    }
+    close(new_fd);
+  }
 }
 
 int client(const char* hostname, const char* port) {
@@ -109,87 +251,23 @@ int server() {
   //   revieve and print message
   //   prompt user for message to send
   //   send message to client
-  int sockfd, new_fd;
-  struct addrinfo hints, *servinfo, *p;
+
+  int sockfd;
+  struct addrinfo hints, *servinfo;
   struct sockaddr_storage their_addr;
-  socklen_t sin_size;
-  struct sigaction sa;
-  int yes=1;
-  char s[INET6_ADDRSTRLEN];
-  int rv;
 
-  memset(&hints, 0, sizeof hints);
-  hints.ai_family = AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags = AI_PASSIVE;
+  format_hints(&hints);
 
-  if ((rv = getaddrinfo(NULL, MYPORT, &hints, &servinfo)) != 0) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-    return 1;
-  }
+  if(resolve_addrinfo(&hints, &servinfo)) return 1;
 
-  for(p = servinfo; p != NULL; p = p->ai_next){
-    if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
-      perror("server: socket");
-      continue;
-    }
-    if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1){
-      perror("setsockopt");
-      exit(1);
-    }
-    if(bind(sockfd, p->ai_addr, p->ai_addrlen) == -1){
-      close(sockfd);
-      perror("server: bind");
-      continue;
-    }
-    break;
-  }
+  // make connection from addrinfo list (servinfo, sockfd)
+  connect(servinfo, &sockfd);
 
-  freeaddrinfo(servinfo);
+  // reap zombies
+  reap();
 
-  if(p == NULL){
-    fprintf(stderr, "server: failed to bind\n");
-    exit(1);
-  }
-
-  if(listen(sockfd, BACKLOG) == -1){
-    perror("listen");
-    exit(1);
-  }
-
-  sa.sa_handler = sigchld_handler;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESTART;
-  if(sigaction(SIGCHLD, &sa, NULL) == -1){
-    perror("sigaction");
-    exit(1);
-  }
-
-  printf("server: waiting for connections...\n");
-
-  while(1){
-    sin_size = sizeof their_addr;
-    new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
-    if(new_fd == -1){
-      perror("accept");
-      continue;
-    }
-
-    inet_ntop(their_addr.ss_family,
-              get_in_addr((struct sockaddr *)&their_addr),
-              s, sizeof s);
-    printf("server: get connection from %s\n", s);
-
-    if(!fork()){
-      close(sockfd);
-      if(send(new_fd, "Hello from server!", 18, 0) == -1){
-        perror("send");
-      }
-      close(new_fd);
-      exit(0);
-    }
-    close(new_fd);
-  }
+  // accept connections (their_addr)
+  accept_connections(&their_addr, &sockfd);
 
   return 0;
 }
