@@ -57,7 +57,7 @@ struct chat_packet unpack(char* data){
   uint16_t length;
 
   version = (uint16_t)(data[1]<<8 | data[0]);
-  length = (uint16_t)(data[2])
+  length = (uint16_t)(data[2]);
 }
 
 void sigchld_handler(int s) {
