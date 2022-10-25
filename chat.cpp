@@ -29,13 +29,19 @@
 #define CHAT_VERSION 457 // version of chat protocol
 
 struct chat_packet {
-  uint16_t  version = CHAT_VERSION;
+  uint16_t  version = htons(CHAT_VERSION); // htons to convert to Big-Endian
   uint16_t  length;
-  char      message[];
+  char*      message;
 };
 
-void create_chat_packet(char* msg, unsigned short lenngth){
+void create_chat_packet(char* msg, unsigned short length){
+    struct chat_packet* packetToSend;
+    packetToSend->length = htons(length - 1); //subtract 1 for the \n in the string
+    packetToSend->message = msg;
 
+
+    // printf("%s", packetToSend->message);
+ 
 
 }
 
@@ -179,7 +185,7 @@ void accept_connections(struct sockaddr_storage *their_addr, int *sockfd){
     if(!fork()){
       child(sockfd, &new_fd);
     }
-    close(new_fd);
+    // close(new_fd);
   }
 }
 
@@ -200,7 +206,7 @@ int client(const char* hostname, const char* port) {
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
 
-  printf("here");
+
   if((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0){
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
     return 1;
@@ -236,8 +242,17 @@ int client(const char* hostname, const char* port) {
   }
 
   buf[numbytes] = '\0';
-
+  
   printf("client: received '%s'\n", buf);
+
+  while(1){ 
+    char textToSend[MAXDATASIZE];
+    printf("You: ");
+    fgets(textToSend, MAXDATASIZE, stdin);
+    create_chat_packet(textToSend, strlen(textToSend));
+
+
+  }
 
   close(sockfd);
   
