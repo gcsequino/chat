@@ -36,6 +36,7 @@ struct chat_packet {
 
 void create_chat_packet(char* msg, unsigned short lenngth){
 
+
 }
 
 char* pack(struct chat_packet *packet){
@@ -151,7 +152,7 @@ void child(int *sockfd, int *new_fd) {
       exit(1);
     }
     recv_buf[numbytes] = '\0';
-    printf("server: recieved '%s'\n", recv_buf);
+    printf("server: received '%s'\n", recv_buf);
   }
   close(*new_fd);
   exit(0);
@@ -199,6 +200,7 @@ int client(const char* hostname, const char* port) {
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
 
+  printf("here");
   if((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0){
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
     return 1;
@@ -235,7 +237,7 @@ int client(const char* hostname, const char* port) {
 
   buf[numbytes] = '\0';
 
-  printf("client: recieved '%s'\n", buf);
+  printf("client: received '%s'\n", buf);
 
   close(sockfd);
   
