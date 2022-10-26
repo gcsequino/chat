@@ -34,18 +34,9 @@ struct chat_packet {
   char*      message;
 };
 
-void create_chat_packet(char* msg, unsigned short length){
-    struct chat_packet* packetToSend;
-    packetToSend->length = htons(length - 1); //subtract 1 for the \n in the string
-    packetToSend->message = msg;
 
 
-    // printf("%s", packetToSend->message);
- 
-
-}
-
-char* pack(struct chat_packet *packet){
+char* pack(struct chat_packet *packet){ 
   uint16_t net_version = htons(packet->version);
   uint16_t net_length = htons(packet->length);
 
@@ -57,6 +48,16 @@ char* pack(struct chat_packet *packet){
   // use memcopy here
   buf = packet->message;
   return buf;
+}
+
+char* create_chat_packet(char* msg, unsigned short length){
+    struct chat_packet *packetToSend;
+    packetToSend->length = htons(length - 1); //subtract 1 for the \n in the string
+    packetToSend->message = msg;
+
+    return pack(packetToSend);
+
+
 }
 
 struct chat_packet unpack(char* data){
@@ -246,10 +247,21 @@ int client(const char* hostname, const char* port) {
   printf("client: received '%s'\n", buf);
 
   while(1){ 
+    // Maybe We dont need the create_chat_packet function if we are just building a struct. 
+    uint16_t length = 0;
     char textToSend[MAXDATASIZE];
     printf("You: ");
+    
     fgets(textToSend, MAXDATASIZE, stdin);
-    create_chat_packet(textToSend, strlen(textToSend));
+    length = strlen(textToSend) - 1;
+    chat_packet packetToSend[144] = {CHAT_VERSION, length, textToSend};
+
+    printf("%d", packetToSend->version);
+    printf("\n");
+    printf("%d", packetToSend->length);
+    printf("\n");
+    printf("%s", packetToSend->message);
+
 
 
   }
