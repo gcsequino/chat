@@ -29,16 +29,14 @@
 #define CHAT_VERSION 457 // version of chat protocol
 
 struct chat_packet {
-  uint16_t  version = CHAT_VERSION;
+  uint16_t  version = htons(CHAT_VERSION); // htons to convert to Big-Endian
   uint16_t  length;
-  char      message[];
+  char*      message;
 };
 
-void create_chat_packet(char* msg, unsigned short lenngth){
 
-}
 
-char* pack(struct chat_packet *packet){
+char* pack(struct chat_packet *packet){ 
   uint16_t net_version = htons(packet->version);
   uint16_t net_length = htons(packet->length);
 
@@ -47,17 +45,20 @@ char* pack(struct chat_packet *packet){
   *buf++ = net_version;
   *buf++ = net_length >> 8;
   *buf++ = net_length;
+
   // use memcopy here
   buf = packet->message;
   return buf;
 }
+
 
 struct chat_packet unpack(char* data){
   uint16_t version;
   uint16_t length;
 
   version = (uint16_t)(data[1]<<8 | data[0]);
-  length = (uint16_t)(data[2])
+  length = (uint16_t)(data[2]);
+
 }
 
 void sigchld_handler(int s) {
@@ -136,7 +137,7 @@ void child(int *sockfd, int *new_fd) {
   int numbytes;
   char recv_buf[MAXDATASIZE];
   char send_buf[MAXDATASIZE];
-  close(*sockfd);
+  //close(*sockfd);
   if(send(*new_fd, "Hello from server!", 18, 0) == -1){
     perror("send");
   }
@@ -146,12 +147,12 @@ void child(int *sockfd, int *new_fd) {
   //   prompt user for message to send
   //   send message to client
   while(1){
-    if((numbytes = recv(*sockfd, recv_buf, MAXDATASIZE-1, 0)) == -1){
+    if((numbytes = recv(*new_fd, recv_buf, MAXDATASIZE-1, 0)) == -1){
       perror("recv");
       exit(1);
     }
     recv_buf[numbytes] = '\0';
-    printf("server: recieved '%s'\n", recv_buf);
+    printf("server: received '%s'\n", recv_buf);
   }
   close(*new_fd);
   exit(0);
@@ -178,7 +179,7 @@ void accept_connections(struct sockaddr_storage *their_addr, int *sockfd){
     if(!fork()){
       child(sockfd, &new_fd);
     }
-    close(new_fd);
+    // close(new_fd);
   }
 }
 
@@ -198,6 +199,7 @@ int client(const char* hostname, const char* port) {
   memset(&hints, 0, sizeof hints);
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
+
 
   if((rv = getaddrinfo(hostname, port, &hints, &servinfo)) != 0){
     fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -234,8 +236,30 @@ int client(const char* hostname, const char* port) {
   }
 
   buf[numbytes] = '\0';
+  
+  printf("client: received '%s'\n", buf);
 
-  printf("client: recieved '%s'\n", buf);
+  while(1){ 
+    uint16_t length = 0;
+    char textToSend[MAXDATASIZE];
+    printf("You: ");
+    
+    fgets(textToSend, MAXDATASIZE, stdin);
+    length = strlen(textToSend) - 1;
+    chat_packet packetToSend[length] = {CHAT_VERSION, length, textToSend};
+
+    char* packedPacket = pack(packetToSend);
+    printf(packedPacket);
+
+    if(send(sockfd, packedPacket, length + 2, 0) == -1){
+      perror("send");
+    }
+
+    //printf("%d , %d, %s", packetToSend->version, packetToSend->length, packetToSend->message);
+
+
+
+  }
 
   close(sockfd);
   
