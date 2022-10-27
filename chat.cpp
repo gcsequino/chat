@@ -45,8 +45,7 @@ char* pack(struct chat_packet *packet){
   *buf++ = net_version;
   *buf++ = net_length >> 8;
   *buf++ = net_length;
-  printf("here");
-  printf(buf);
+
   // use memcopy here
   buf = packet->message;
   return buf;
