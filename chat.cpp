@@ -45,37 +45,39 @@ char* pack(struct chat_packet *packet){
   printf("Packed Length: %d\n", net_length);
 
   char* buf = (char*)(calloc(144, 1));
-  char* temp = (char*)(calloc(2,1));
-  memcpy(temp, (char*)&net_version, 2);
-  strcat(buf, temp);
-  memcpy(temp, (char*)&net_length, 2);
-  strcat(buf, temp);
-  strcat(buf, packet->message);
+  char* version = (char*)(calloc(2,1));
+  char* length = (char*)(calloc(2,1));
+
+  memcpy(version, (char*)&net_version, 2);
+  memcpy(buf, version, 2);
+  
+  memcpy(length, (char*)&net_length, 2);
+  memcpy(buf+2, length, 2);
+
+  memcpy(buf+4, packet->message, packet->length);
 
   return buf;
 }
 
 
-struct chat_packet unpack(char* data){
+bool unpack(char* data){
   uint16_t version;
   uint16_t length;
 
-  char* packetText;
   version = (unsigned char)data[0] << CHAR_BIT | (unsigned char)data[1];
   length = (unsigned char)data[2] << CHAR_BIT | (unsigned char)data[3];
 
-  packetText = (char*)"string";
+  char packetText[length];
+  
+  memcpy(packetText, &data[4], length);
 
 
   printf("Unpacked Version: %d\n", version);
-  printf("Unpacked Length: %d\n", ntohs(length));
-  //printf("%s", packetText);
+  printf("Unpacked Length: %d\n", length);
+  printf("Unpacket Text: %s \n", packetText);
+  //dont even have to return a chat packet, just need to display the text. 
 
-  chat_packet unpackedPacket[length + 4] = {version, length, packetText};
-  return *unpackedPacket;
-
-
-
+  return true;
 }
 
 void sigchld_handler(int s) {
@@ -169,7 +171,7 @@ void child(int *sockfd, int *new_fd) {
       exit(1);
     }
     recv_buf[numbytes] = '\0';
-    printf("server: received '%s'\n", recv_buf);
+    printf("server: received '%c'\n", recv_buf+4);
   }
   close(*new_fd);
   exit(0);
@@ -275,7 +277,9 @@ int client(const char* hostname, const char* port) {
       perror("send");
     }
 
-    chat_packet receivedPacket = unpack(packedPacket);
+    if(unpack(packedPacket)){
+      continue;
+    }
 
 
   }
