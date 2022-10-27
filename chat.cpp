@@ -23,7 +23,7 @@
 #include <signal.h>
 #include <time.h>
 
-#define MYPORT "3490" // the port users will be connecting to
+#define MYPORT "3500" // the port users will be connecting to
 #define BACKLOG 10 // how many pending connections queue will hold
 #define MAXDATASIZE 140 // max length of chat message
 #define CHAT_VERSION 457 // version of chat protocol
@@ -40,15 +40,27 @@ char* pack(struct chat_packet *packet){
   uint16_t net_version = htons(packet->version);
   uint16_t net_length = htons(packet->length);
 
-  char *buf;
-  *buf++ = net_version >> 8;
-  *buf++ = net_version;
-  *buf++ = net_length >> 8;
-  *buf++ = net_length;
+  //char* buf;
+  //*buf++ = net_version >> 8;
+  //*buf++ = net_version;
+  
+  //*buf++ = net_length >> 8;
+  //*buf++ = net_length;
 
   // use memcopy here
-  buf = packet->message;
-  return buf;
+  //buf = packet->message;
+
+  //printf("%s", packet->message);
+
+  char* buf = (char*)(calloc(144, 1));
+  char* temp = (char*)(calloc(2,1));
+  memcpy(temp, (char*)&net_version, 2);
+  strcat(buf, temp);
+  memcpy(temp, (char*)&net_length, 2);
+  strcat(buf, temp);
+  strcat(buf, packet->message);
+  //printf("%s", buf);
+  //return buf;
 }
 
 
@@ -56,8 +68,10 @@ struct chat_packet unpack(char* data){
   uint16_t version;
   uint16_t length;
 
-  version = (uint16_t)(data[1]<<8 | data[0]);
-  length = (uint16_t)(data[2]);
+  version = 
+
+  printf("%d", version);
+  printf("%s", length);
 
 }
 
@@ -242,18 +256,25 @@ int client(const char* hostname, const char* port) {
   while(1){ 
     uint16_t length = 0;
     char textToSend[MAXDATASIZE];
-    printf("You: ");
     
+    //Take Input and Build packet
+    printf("You: ");
     fgets(textToSend, MAXDATASIZE, stdin);
     length = strlen(textToSend) - 1;
     chat_packet packetToSend[length] = {CHAT_VERSION, length, textToSend};
 
+    //Pack it up
     char* packedPacket = pack(packetToSend);
     printf(packedPacket);
 
+    //Send it
     if(send(sockfd, packedPacket, length + 2, 0) == -1){
       perror("send");
     }
+
+    unpack(packedPacket);
+
+    
 
     //printf("%d , %d, %s", packetToSend->version, packetToSend->length, packetToSend->message);
 
