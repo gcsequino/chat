@@ -45,20 +45,13 @@ char* pack(struct chat_packet *packet){
   *buf++ = net_version;
   *buf++ = net_length >> 8;
   *buf++ = net_length;
+  printf("here");
+  printf(buf);
   // use memcopy here
   buf = packet->message;
   return buf;
 }
 
-char* create_chat_packet(char* msg, unsigned short length){
-    struct chat_packet *packetToSend;
-    packetToSend->length = htons(length - 1); //subtract 1 for the \n in the string
-    packetToSend->message = msg;
-
-    return pack(packetToSend);
-
-
-}
 
 struct chat_packet unpack(char* data){
   uint16_t version;
@@ -66,6 +59,7 @@ struct chat_packet unpack(char* data){
 
   version = (uint16_t)(data[1]<<8 | data[0]);
   length = (uint16_t)(data[2]);
+
 }
 
 void sigchld_handler(int s) {
@@ -144,7 +138,7 @@ void child(int *sockfd, int *new_fd) {
   int numbytes;
   char recv_buf[MAXDATASIZE];
   char send_buf[MAXDATASIZE];
-  close(*sockfd);
+  //close(*sockfd);
   if(send(*new_fd, "Hello from server!", 18, 0) == -1){
     perror("send");
   }
@@ -154,7 +148,7 @@ void child(int *sockfd, int *new_fd) {
   //   prompt user for message to send
   //   send message to client
   while(1){
-    if((numbytes = recv(*sockfd, recv_buf, MAXDATASIZE-1, 0)) == -1){
+    if((numbytes = recv(*new_fd, recv_buf, MAXDATASIZE-1, 0)) == -1){
       perror("recv");
       exit(1);
     }
@@ -247,20 +241,22 @@ int client(const char* hostname, const char* port) {
   printf("client: received '%s'\n", buf);
 
   while(1){ 
-    // Maybe We dont need the create_chat_packet function if we are just building a struct. 
     uint16_t length = 0;
     char textToSend[MAXDATASIZE];
     printf("You: ");
     
     fgets(textToSend, MAXDATASIZE, stdin);
     length = strlen(textToSend) - 1;
-    chat_packet packetToSend[144] = {CHAT_VERSION, length, textToSend};
+    chat_packet packetToSend[length] = {CHAT_VERSION, length, textToSend};
 
-    printf("%d", packetToSend->version);
-    printf("\n");
-    printf("%d", packetToSend->length);
-    printf("\n");
-    printf("%s", packetToSend->message);
+    char* packedPacket = pack(packetToSend);
+    printf(packedPacket);
+
+    if(send(sockfd, packedPacket, length + 2, 0) == -1){
+      perror("send");
+    }
+
+    //printf("%d , %d, %s", packetToSend->version, packetToSend->length, packetToSend->message);
 
 
 
