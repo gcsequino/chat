@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <time.h>
+#include <climits>
 
 #define MYPORT "3500" // the port users will be connecting to
 #define BACKLOG 10 // how many pending connections queue will hold
@@ -40,17 +41,8 @@ char* pack(struct chat_packet *packet){
   uint16_t net_version = htons(packet->version);
   uint16_t net_length = htons(packet->length);
 
-  //char* buf;
-  //*buf++ = net_version >> 8;
-  //*buf++ = net_version;
-  
-  //*buf++ = net_length >> 8;
-  //*buf++ = net_length;
-
-  // use memcopy here
-  //buf = packet->message;
-
-  //printf("%s", packet->message);
+  printf("Packed Version: %d\n", net_version);
+  printf("Packed Length: %d\n", net_length);
 
   char* buf = (char*)(calloc(144, 1));
   char* temp = (char*)(calloc(2,1));
@@ -59,8 +51,8 @@ char* pack(struct chat_packet *packet){
   memcpy(temp, (char*)&net_length, 2);
   strcat(buf, temp);
   strcat(buf, packet->message);
-  //printf("%s", buf);
-  //return buf;
+
+  return buf;
 }
 
 
@@ -68,10 +60,21 @@ struct chat_packet unpack(char* data){
   uint16_t version;
   uint16_t length;
 
-  version = 
+  char* packetText;
+  version = (unsigned char)data[0] << CHAR_BIT | (unsigned char)data[1];
+  length = (unsigned char)data[2] << CHAR_BIT | (unsigned char)data[3];
 
-  printf("%d", version);
-  printf("%s", length);
+  packetText = (char*)"string";
+
+
+  printf("Unpacked Version: %d\n", version);
+  printf("Unpacked Length: %d\n", ntohs(length));
+  //printf("%s", packetText);
+
+  chat_packet unpackedPacket[length + 4] = {version, length, packetText};
+  return *unpackedPacket;
+
+
 
 }
 
@@ -150,7 +153,7 @@ void reap(){
 void child(int *sockfd, int *new_fd) {
   int numbytes;
   char recv_buf[MAXDATASIZE];
-  char send_buf[MAXDATASIZE];
+  //char send_buf[MAXDATASIZE];
   //close(*sockfd);
   if(send(*new_fd, "Hello from server!", 18, 0) == -1){
     perror("send");
@@ -261,23 +264,18 @@ int client(const char* hostname, const char* port) {
     printf("You: ");
     fgets(textToSend, MAXDATASIZE, stdin);
     length = strlen(textToSend) - 1;
-    chat_packet packetToSend[length] = {CHAT_VERSION, length, textToSend};
+    chat_packet packetToSend[length+4] = {CHAT_VERSION, length, textToSend};
 
     //Pack it up
     char* packedPacket = pack(packetToSend);
-    printf(packedPacket);
+    //printf(packedPacket);
 
     //Send it
     if(send(sockfd, packedPacket, length + 2, 0) == -1){
       perror("send");
     }
 
-    unpack(packedPacket);
-
-    
-
-    //printf("%d , %d, %s", packetToSend->version, packetToSend->length, packetToSend->message);
-
+    chat_packet receivedPacket = unpack(packedPacket);
 
 
   }
