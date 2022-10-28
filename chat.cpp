@@ -41,8 +41,8 @@ char* pack(struct chat_packet *packet){
   uint16_t net_version = htons(packet->version);
   uint16_t net_length = htons(packet->length);
 
-  printf("Packed Version: %d\n", net_version);
-  printf("Packed Length: %d\n", net_length);
+  //printf("Packed Version: %d\n", net_version);
+  //printf("Packed Length: %d\n", net_length);
 
   char* buf = (char*)(calloc(144, 1));
   char* version = (char*)(calloc(2,1));
@@ -68,13 +68,14 @@ bool unpack(char* data){
   length = (unsigned char)data[2] << CHAR_BIT | (unsigned char)data[3];
 
   char packetText[length];
+  packetText[length] = '\0';
   
   memcpy(packetText, &data[4], length);
 
 
-  printf("Unpacked Version: %d\n", version);
-  printf("Unpacked Length: %d\n", length);
-  printf("Unpacket Text: %s \n", packetText);
+  //printf("Unpacked Version: %d\n", version);
+  //printf("Unpacked Length: %d\n", length);
+  printf("%s \n", packetText);
   //dont even have to return a chat packet, just need to display the text. 
 
   return true;
@@ -170,8 +171,30 @@ void child(int *sockfd, int *new_fd) {
       perror("recv");
       exit(1);
     }
-    recv_buf[numbytes] = '\0';
-    printf("server: received '%c'\n", recv_buf+4);
+    printf("Friend: ");
+    unpack(recv_buf);
+
+    uint16_t length = 0;
+    char textToSend[MAXDATASIZE];
+
+    //Take Input and Build packet
+    printf("You: ");
+    fgets(textToSend, MAXDATASIZE, stdin);
+    length = strlen(textToSend) - 1;
+    struct chat_packet packetToSend = {CHAT_VERSION, length, textToSend};
+
+    //Pack it up
+    char* packedPacket = pack(&packetToSend);
+    //printf(packedPacket);
+
+    //Send it
+    if(send(*new_fd, packedPacket, length+4, 0) == -1){
+      perror("send");
+    }
+
+    //if(unpack(packedPacket)){
+    //  continue;
+    //}
   }
   close(*new_fd);
   exit(0);
@@ -266,20 +289,29 @@ int client(const char* hostname, const char* port) {
     printf("You: ");
     fgets(textToSend, MAXDATASIZE, stdin);
     length = strlen(textToSend) - 1;
-    chat_packet packetToSend[length+4] = {CHAT_VERSION, length, textToSend};
+    struct chat_packet packetToSend = {CHAT_VERSION, length, textToSend};
 
     //Pack it up
-    char* packedPacket = pack(packetToSend);
+    char* packedPacket = pack(&packetToSend);
     //printf(packedPacket);
 
     //Send it
-    if(send(sockfd, packedPacket, length + 2, 0) == -1){
+    if(send(sockfd, packedPacket, length+4, 0) == -1){
       perror("send");
     }
 
-    if(unpack(packedPacket)){
-      continue;
+    //if(unpack(packedPacket)){
+    //  continue;
+    //}
+
+    int numbytes;
+    char recv_buf[MAXDATASIZE];
+    if((numbytes = recv(sockfd, recv_buf, MAXDATASIZE-1, 0)) == -1){
+      perror("recv");
+      exit(1);
     }
+    printf("Friend: ");
+    unpack(recv_buf);
 
 
   }
