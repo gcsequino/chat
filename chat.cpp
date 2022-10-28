@@ -73,10 +73,17 @@ bool unpack(char* data){
   
   memcpy(packetText, &data[4], length);
 
+  //TODO: Check Version number, return false if number is wrong. 
+
+  if(version != 457){
+    printf("ERROR: Wrong packet version \n");
+    return false;
+  }
+
 
   //printf("Unpacked Version: %d\n", version);
   //printf("Unpacked Length: %d\n", length);
-  printf("%s \n", packetText);
+  printf("Friend: %s \n", packetText);
   //dont even have to return a chat packet, just need to display the text. 
 
   return true;
@@ -171,15 +178,25 @@ void child(int *sockfd, int *new_fd) {
       perror("recv");
       exit(1);
     }
-    printf("Friend: ");
-    unpack(recv_buf);
+
+    if(!unpack(recv_buf)){
+      continue;
+    }
 
     uint16_t length = 0;
-    char textToSend[MAXDATASIZE];
 
     //Take Input and Build packet
     printf("You: ");
-    fgets(textToSend, MAXDATASIZE, stdin);
+    char* textToSend = NULL;
+    size_t len = 0;
+    getline(&textToSend, &len, stdin);
+    while (len > 144){
+      printf("ERROR: Input too long. \n");
+      printf("You: ");
+      len = 0;
+      getline(&textToSend, &len, stdin);
+    }
+
     length = strlen(textToSend) - 1;
     struct chat_packet packetToSend = {CHAT_VERSION, length, textToSend};
 
@@ -290,11 +307,18 @@ int client(const char* hostname, const char* port) {
 
   while(1){ 
     uint16_t length = 0;
-    char textToSend[MAXDATASIZE];
     
     //Take Input and Build packet
     printf("You: ");
-    fgets(textToSend, MAXDATASIZE, stdin);
+    char* textToSend = NULL;
+    size_t len = 0;
+    getline(&textToSend, &len, stdin);
+    if (len > 144){
+      printf("ERROR: Input too long. \n");
+      continue;
+    }
+
+    //fgets(textToSend, MAXDATASIZE, stdin);
     length = strlen(textToSend) - 1;
     struct chat_packet packetToSend = {CHAT_VERSION, length, textToSend};
 
@@ -307,18 +331,16 @@ int client(const char* hostname, const char* port) {
       perror("send");
     }
 
-    //if(unpack(packedPacket)){
-    //  continue;
-    //}
-
     int numbytes;
     char recv_buf[MAXDATASIZE];
     if((numbytes = recv(sockfd, recv_buf, MAXDATASIZE-1, 0)) == -1){
       perror("recv");
       exit(1);
     }
-    printf("Friend: ");
-    unpack(recv_buf);
+    
+    if(!unpack(recv_buf)){
+      continue;
+    }
 
 
   }
