@@ -72,6 +72,8 @@ bool unpack(char* data){
   
   memcpy(packetText, &data[4], length);
 
+  //TODO: Check Version number, return false if number is wrong. 
+
 
   //printf("Unpacked Version: %d\n", version);
   //printf("Unpacked Length: %d\n", length);
@@ -175,11 +177,19 @@ void child(int *sockfd, int *new_fd) {
     unpack(recv_buf);
 
     uint16_t length = 0;
-    char textToSend[MAXDATASIZE];
 
     //Take Input and Build packet
     printf("You: ");
-    fgets(textToSend, MAXDATASIZE, stdin);
+    char* textToSend = NULL;
+    size_t len = 0;
+    getline(&textToSend, &len, stdin);
+    while (len > 144){
+      printf("ERROR: Input too long. \n");
+      printf("You: ");
+      len = 0;
+      getline(&textToSend, &len, stdin);
+    }
+
     length = strlen(textToSend) - 1;
     struct chat_packet packetToSend = {CHAT_VERSION, length, textToSend};
 
@@ -283,11 +293,18 @@ int client(const char* hostname, const char* port) {
 
   while(1){ 
     uint16_t length = 0;
-    char textToSend[MAXDATASIZE];
     
     //Take Input and Build packet
     printf("You: ");
-    fgets(textToSend, MAXDATASIZE, stdin);
+    char* textToSend = NULL;
+    size_t len = 0;
+    getline(&textToSend, &len, stdin);
+    if (len > 144){
+      printf("ERROR: Input too long. \n");
+      continue;
+    }
+
+    //fgets(textToSend, MAXDATASIZE, stdin);
     length = strlen(textToSend) - 1;
     struct chat_packet packetToSend = {CHAT_VERSION, length, textToSend};
 
