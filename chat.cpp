@@ -23,8 +23,11 @@
 #include <signal.h>
 #include <time.h>
 #include <climits>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <net/if.h>
 
-#define MYPORT "3500" // the port users will be connecting to
+#define MYPORT "0" // the port users will be connecting to
 #define BACKLOG 10 // how many pending connections queue will hold
 #define MAXDATASIZE 140 // max length of chat message
 #define CHAT_VERSION 457 // version of chat protocol
@@ -34,8 +37,6 @@ struct chat_packet {
   uint16_t  length;
   char*      message;
 };
-
-
 
 char* pack(struct chat_packet *packet){ 
   uint16_t net_version = htons(packet->version);
@@ -89,7 +90,7 @@ void sigchld_handler(int s) {
 
 void *get_in_addr(struct sockaddr *sa) {
   if(sa->sa_family == AF_INET){
-    return &(((struct sockaddr_in*)sa)->sin_addr); // IPV$
+    return &(((struct sockaddr_in*)sa)->sin_addr); // IPV4
   }
   return &(((struct sockaddr_in6*)sa)->sin6_addr); // IPV6
 }
@@ -129,6 +130,7 @@ void connect(struct addrinfo *servinfo, int *sockfd) {
     }
     break;
   }
+
   freeaddrinfo(servinfo);
   
   if(p == NULL){
@@ -157,10 +159,8 @@ void child(int *sockfd, int *new_fd) {
   int numbytes;
   char recv_buf[MAXDATASIZE];
   //char send_buf[MAXDATASIZE];
-  //close(*sockfd);
-  if(send(*new_fd, "Hello from server!", 18, 0) == -1){
-    perror("send");
-  }
+  close(*sockfd);
+  
   // loop
   //   block to revieve message
   //   revieve and print message
@@ -204,7 +204,22 @@ void accept_connections(struct sockaddr_storage *their_addr, int *sockfd){
   int new_fd;
   char s[INET6_ADDRSTRLEN];
   socklen_t sin_size;
-  printf("server: waiting for connections...\n");
+
+  uint16_t port = 0;
+  struct sockaddr_in sin;
+  socklen_t len = sizeof(sin);
+  if (getsockname(*sockfd, (struct sockaddr *)&sin, &len) == -1)
+    perror("getsockname");
+  else
+    port = ntohs(sin.sin_port);
+
+  struct ifreq ifr;
+  ifr.ifr_addr.sa_family = AF_INET;
+  strncpy(ifr.ifr_name, "eno1", IFNAMSIZ-1);
+  ioctl(*sockfd, SIOCGIFADDR, &ifr);
+  printf("Waiting for connection on %s port %d\n", inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr), port);
+
+
   while(1){
     sin_size = sizeof *their_addr;
     new_fd = accept(*sockfd, (struct sockaddr *)their_addr, &sin_size);
@@ -216,7 +231,7 @@ void accept_connections(struct sockaddr_storage *their_addr, int *sockfd){
     inet_ntop(their_addr->ss_family,
               get_in_addr((struct sockaddr *)their_addr),
               s, sizeof s);
-    printf("server: get connection from %s\n", s);
+    printf("Found a friend! You recieve first.\n");
 
     if(!fork()){
       child(sockfd, &new_fd);
@@ -232,8 +247,7 @@ int client(const char* hostname, const char* port) {
   //   send the message
   //   block to recieve message
   //   recieve message and print
-  int sockfd, numbytes;
-  char buf[MAXDATASIZE];
+  int sockfd;
   struct addrinfo hints, *servinfo, *p;
   int rv;
   char s[INET6_ADDRSTRLEN];
@@ -268,18 +282,11 @@ int client(const char* hostname, const char* port) {
 
   inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
             s, sizeof s);
-  printf("client: connecting to %s\n", s);
+  printf("Sonnecting to server...\n");
+  printf("Connected!\n");
+  printf("Connected to a friend! You send first.\n");
 
   freeaddrinfo(servinfo);
-
-  if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1){
-    perror("recv");
-    exit(1);
-  }
-
-  buf[numbytes] = '\0';
-  
-  printf("client: received '%s'\n", buf);
 
   while(1){ 
     uint16_t length = 0;
@@ -387,12 +394,12 @@ int main(int argc, char* argv[]){
 
   if(!strcmp(hostname, "-1") && !strcmp(port, "-1") && valid_usage) {
     // server
-    printf("starting server\n");
+    printf("Welcome to chat!\n");
     return server();
   }
   else if(valid_usage){
     // client
-    printf("starting client\n");
+    //printf("starting client\n");
     return client(hostname, port);
   }
   return 0;
